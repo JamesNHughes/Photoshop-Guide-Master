@@ -1,0 +1,67 @@
+{
+  "manifestVersion": 5,
+  "id": "com.local.copy-paste-guides",
+  "name": "Guide Master",
+  "version": "1.0.0",
+  "main": "index.html",
+  "host": {
+    "app": "PS",
+    "minVersion": "23.0.0"
+  },
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess"
+  },
+  "icons": [
+    {
+      "width": 23,
+      "height": 23,
+      "path": "icons/scissors-dark.png",
+      "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium"]
+    },
+    {
+      "width": 23,
+      "height": 23,
+      "path": "icons/scissors-light.png",
+      "scale": [1, 2],
+      "theme": ["lightest", "light"]
+    }
+  ],
+  "entrypoints": [
+    {
+      "type": "command",
+      "id": "copyGuides",
+      "label": { "default": "Copy Guides" }
+    },
+    {
+      "type": "command",
+      "id": "pasteGuides",
+      "label": { "default": "Paste Guides" }
+    },
+    {
+      "type": "command",
+      "id": "createGuides",
+      "label": { "default": "Create Guide…" }
+    },
+    {
+      "type": "command",
+      "id": "clearGuides",
+      "label": { "default": "Clear All Guides" }
+    },
+    {
+      "type": "command",
+      "id": "savePreset",
+      "label": { "default": "Save Guide Preset…" }
+    },
+    {
+      "type": "command",
+      "id": "loadPreset",
+      "label": { "default": "Load Guide Preset…" }
+    },
+    {
+      "type": "command",
+      "id": "managePresets",
+      "label": { "default": "Manage Presets…" }
+    }
+  ]
+}

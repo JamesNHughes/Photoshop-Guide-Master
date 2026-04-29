@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guide Master</title>
+    <style>
+      /* Guide Master dialog styles */
+
+      /*
+       * Inherit Photoshop's own font so text matches the host UI exactly.
+       * --uxp-host-font-* are injected automatically by UXP and update
+       * whenever the user changes the Photoshop theme / UI scale.
+       */
+      body {
+        font-family: var(--uxp-host-font-family, adobe-clean, 'Source Sans Pro', sans-serif);
+        font-size: var(--uxp-host-font-size, 12px);
+        margin: 0;
+        padding: 0;
+      }
+
+      .cpg-dialog {
+        min-width: 400px;
+        padding: 0;
+        /* --uxp-host-* variables are kept in sync with the active PS theme */
+        color: var(--uxp-host-text-color);
+        background: var(--uxp-host-background-color);
+        border: 1px solid var(--uxp-host-border-color);
+      }
+
+      .cpg-dialog--wide {
+        min-width: 520px;
+      }
+
+      .cpg-dialog__header {
+        padding: 13px 16px 12px;
+        border-bottom: 1px solid var(--uxp-host-border-color);
+      }
+
+      .cpg-dialog__title {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+      }
+
+      .cpg-dialog__body {
+        padding: 16px;
+      }
+
+      .cpg-info-grid {
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        border-radius: 2px;
+        /* theme-specific tint applied via data-cpg-theme on <body> (set by JS) */
+      }
+
+      /* Dark PS themes (darkest / dark / medium) — darken the info surface */
+      body[data-cpg-theme="dark"] .cpg-info-grid {
+        background: rgba(0, 0, 0, 0.22);
+      }
+
+      /* Light PS themes (light / lightest) — subtle light shadow instead */
+      body[data-cpg-theme="light"] .cpg-info-grid {
+        background: rgba(0, 0, 0, 0.07);
+      }
+
+      .cpg-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 12px;
+        line-height: 1.8;
+      }
+
+      .cpg-info-label {
+        color: var(--uxp-host-label-text-color, var(--uxp-host-text-color));
+        opacity: 0.75;
+      }
+
+      .cpg-info-value {
+        font-weight: 600;
+      }
+
+      .cpg-action-section {
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .cpg-action-row {
+        margin-bottom: 3px;
+      }
+
+      .cpg-action-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .cpg-dialog__footer {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        padding: 12px 16px;
+        border-top: 1px solid var(--uxp-host-border-color);
+      }
+
+      .cpg-field-label {
+        font-size: 12px;
+        margin-bottom: 6px;
+        opacity: 0.85;
+      }
+
+      .cpg-text-input,
+      .cpg-select {
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 7px 8px;
+        color: var(--uxp-host-text-color);
+        background: var(--uxp-host-background-color);
+        border: 1px solid var(--uxp-host-border-color);
+        border-radius: 2px;
+        outline: none;
+      }
+
+      .cpg-text-input:focus,
+      .cpg-select:focus {
+        border-color: var(--uxp-host-border-color);
+      }
+
+      .cpg-muted {
+        margin-top: 6px;
+        font-size: 12px;
+        opacity: 0.75;
+      }
+
+      .cpg-choice-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .cpg-choice-button {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        width: 100%;
+        min-height: 86px;
+        padding: 14px 16px;
+        text-align: left;
+        font-family: inherit;
+        color: var(--uxp-host-text-color);
+        background: transparent;
+        border: 1px solid var(--uxp-host-border-color);
+        border-radius: 4px;
+      }
+
+      body[data-cpg-theme="dark"] .cpg-choice-button {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      body[data-cpg-theme="light"] .cpg-choice-button {
+        background: rgba(0, 0, 0, 0.03);
+      }
+
+      .cpg-choice-button__title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .cpg-choice-button__meta {
+        font-size: 12px;
+        opacity: 0.78;
+      }
+
+      .cpg-field-stack {
+        margin-top: 8px;
+      }
+
+      .cpg-field-stack__item {
+        margin-top: 8px;
+      }
+
+      .cpg-field-stack__item:first-child {
+        margin-top: 0;
+      }
+
+      .cpg-create-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .cpg-section-card {
+        padding: 12px;
+        border: 1px solid var(--uxp-host-border-color);
+        border-radius: 4px;
+      }
+
+      body[data-cpg-theme="dark"] .cpg-section-card {
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      body[data-cpg-theme="light"] .cpg-section-card {
+        background: rgba(0, 0, 0, 0.025);
+      }
+
+      .cpg-section-card__title {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .cpg-section-card__meta {
+        font-size: 12px;
+        opacity: 0.72;
+        margin-bottom: 8px;
+      }
+
+      .cpg-inline-pair {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .cpg-inline-pair:first-of-type {
+        margin-top: 0;
+      }
+
+      .cpg-inline-pair__item {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .cpg-validation-message {
+        margin-top: 10px;
+        font-size: 12px;
+        line-height: 1.4;
+        padding: 10px 12px;
+        border-radius: 4px;
+        border: 1px solid var(--uxp-host-border-color);
+      }
+
+      .cpg-validation-message[data-state="valid"] {
+        color: var(--uxp-host-text-color);
+        opacity: 0.82;
+        background: rgba(0, 0, 0, 0.04);
+      }
+
+      .cpg-validation-message[data-state="invalid"] {
+        color: #d66a6a;
+        background: rgba(214, 106, 106, 0.08);
+      }
+
+      button[disabled] {
+        opacity: 0.5;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="main.js"></script>
+  </body>
+</html>

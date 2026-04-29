@@ -1,0 +1,13 @@
+# Python virtual env
+.venv/
+
+# UXP / Photoshop packaging outputs
+Release/
+*.ccx
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
