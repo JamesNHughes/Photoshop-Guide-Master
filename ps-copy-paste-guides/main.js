@@ -9,22 +9,6 @@ let action;
 
 /** In-memory guide clipboard. Persists for the duration of the Photoshop session. */
 let guideClipboard = null;
-let startupDiagnosticShown = false;
-
-async function runCommandWithDiagnostics(commandName, handler) {
-  try {
-    console.log(`Guide Master: command invoked -> ${commandName}`);
-    return await handler();
-  } catch (error) {
-    console.error(`Guide Master: command failed -> ${commandName}`, error);
-    try {
-      await core?.showAlert?.({ message: `Guide Master command failed: ${commandName}\n\n${error?.message ?? String(error)}` });
-    } catch {
-      // Ignore secondary alert failure.
-    }
-    throw error;
-  }
-}
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -103,6 +87,7 @@ function guideKey(guide) {
   return `${dir}:${coord}`;
 }
 
+// Normalize guide objects before they are compared, saved, or re-applied.
 function dedupeGuides(guides) {
   const seen = new Set();
   const out = [];
@@ -121,6 +106,7 @@ function dedupeGuides(guides) {
   return out;
 }
 
+// Merge is used both for previewing the result in dialogs and for the final save/import behavior.
 function mergeGuides(existingGuides, incomingGuides) {
   const existingKeys = new Set((existingGuides ?? []).map(guideKey));
   let mergeAddCount = 0;
@@ -190,6 +176,38 @@ async function getActiveDocumentSafely() {
 
 async function hasOpenDocument() {
   return !!(await getActiveDocumentSafely());
+}
+
+// Commands can leave the document untouched for several dialog steps, so check
+// that the user is still targeting the same document before mutating guides.
+async function ensureDocumentStillActive(targetDocument, commandLabel) {
+  const currentDocument = await getActiveDocumentSafely();
+  if (currentDocument && currentDocument.id === targetDocument.id) return true;
+
+  await core.showAlert({ message: `Active document changed. Run ${commandLabel} again.` });
+  return false;
+}
+
+// Apply guide mutations in one place so paste, create, and load stay aligned.
+async function applyGuidesToDocument({ targetDocument, guides, pasteMode, existingGuideKeys = null, commandName }) {
+  await core.executeAsModal(
+    async () => {
+      if (pasteMode === "replace") {
+        targetDocument.guides.removeAll();
+      }
+
+      for (const guide of guides) {
+        if (pasteMode === "merge" && existingGuideKeys) {
+          const key = guideKey(guide);
+          if (existingGuideKeys.has(key)) continue;
+          existingGuideKeys.add(key);
+        }
+
+        targetDocument.guides.add(denormalizeDirection(guide.direction), guide.coordinate);
+      }
+    },
+    { commandName }
+  );
 }
 
 function hasLocalFileSystem() {
@@ -1473,18 +1491,9 @@ async function pasteGuides() {
   let mergeSkipCount    = 0;
 
   if (existingCount > 0) {
-    const previewKeys = new Set(existingGuides.map(guideKey));
-    mergeAddCount = 0;
-
-    for (const guide of guidesToPaste) {
-      const key = guideKey(guide);
-      if (previewKeys.has(key)) {
-        mergeSkipCount += 1;
-      } else {
-        mergeAddCount += 1;
-        previewKeys.add(key);
-      }
-    }
+    const preview = mergeGuides(existingGuides, guidesToPaste);
+    mergeAddCount = preview.mergeAddCount;
+    mergeSkipCount = preview.mergeSkipCount;
 
     pasteMode = await askMergeOrReplaceWithOptions({
       title: "Paste Guides",
@@ -1502,29 +1511,15 @@ async function pasteGuides() {
     }
   }
 
-  const currentDocument = await getActiveDocumentSafely();
-  if (!currentDocument || currentDocument.id !== targetDocument.id) {
-    await core.showAlert({ message: "Active document changed. Run Paste Guides again." });
-    return;
-  }
+  if (!(await ensureDocumentStillActive(targetDocument, "Paste Guides"))) return;
 
-  await core.executeAsModal(
-    async () => {
-      if (pasteMode === "replace") {
-        targetDocument.guides.removeAll();
-      }
-
-      for (const guide of guidesToPaste) {
-        if (pasteMode === "merge" && existingGuideKeys) {
-          const key = guideKey(guide);
-          if (existingGuideKeys.has(key)) continue;
-          existingGuideKeys.add(key);
-        }
-        targetDocument.guides.add(denormalizeDirection(guide.direction), guide.coordinate);
-      }
-    },
-    { commandName: "Paste Guides" }
-  );
+  await applyGuidesToDocument({
+    targetDocument,
+    guides: guidesToPaste,
+    pasteMode,
+    existingGuideKeys,
+    commandName: "Paste Guides"
+  });
 
   const successMsg = pasteMode === "replace"
     ? `Replaced with ${plural(guidesToPaste.length, "guide")}.`
@@ -1555,6 +1550,7 @@ async function createGuides() {
 
   let generatedGuides;
   try {
+    // Guide generation is done in pixels even when the UI is showing other units.
     const gutterInPixels = convertLengthToPixels(options.gutterWidth, options.spacingUnit, documentResolution);
     const rowGutterInPixels = convertLengthToPixels(options.rowGutterHeight, options.spacingUnit, documentResolution);
     const leftMarginInPixels = convertLengthToPixels(options.leftMarginWidth, options.spacingUnit, documentResolution);
@@ -1637,29 +1633,17 @@ async function createGuides() {
     }
   }
 
-  const currentDocument = await getActiveDocumentSafely();
-  if (!currentDocument || currentDocument.id !== targetDocument.id) {
-    await core.showAlert({ message: "Active document changed. Run Create Guide again." });
-    return;
-  }
+  const commandName = selectedGuideType === "rows" ? "Create Row Guides" : selectedGuideType === "grid" ? "Create Grid Guides" : "Create Column Guides";
 
-  await core.executeAsModal(
-    async () => {
-      if (pasteMode === "replace") {
-        targetDocument.guides.removeAll();
-      }
+  if (!(await ensureDocumentStillActive(targetDocument, "Create Guide"))) return;
 
-      for (const guide of generatedGuides) {
-        if (pasteMode === "merge" && existingGuideKeys) {
-          const key = guideKey(guide);
-          if (existingGuideKeys.has(key)) continue;
-          existingGuideKeys.add(key);
-        }
-        targetDocument.guides.add(denormalizeDirection(guide.direction), guide.coordinate);
-      }
-    },
-    { commandName: selectedGuideType === "rows" ? "Create Row Guides" : selectedGuideType === "grid" ? "Create Grid Guides" : "Create Column Guides" }
-  );
+  await applyGuidesToDocument({
+    targetDocument,
+    guides: generatedGuides,
+    pasteMode,
+    existingGuideKeys,
+    commandName
+  });
 
   const createdSummary = selectedGuideType === "rows"
     ? `${Math.trunc(options.rowCount)} rows`
@@ -1696,11 +1680,7 @@ async function clearGuides() {
   });
   if (!ok) return;
 
-  const currentDocument = await getActiveDocumentSafely();
-  if (!currentDocument || currentDocument.id !== targetDocument.id) {
-    await core.showAlert({ message: "Active document changed. Run Clear All Guides again." });
-    return;
-  }
+  if (!(await ensureDocumentStillActive(targetDocument, "Clear All Guides"))) return;
 
   await core.executeAsModal(
     async () => {
@@ -1795,7 +1775,6 @@ async function exportPreset(preset) {
     await file.write(JSON.stringify(payload, null, 2));
     await core.showAlert({ message: `Exported preset “${preset.name}”.` });
   } catch (error) {
-    console.error("Export preset failed", error);
     await core.showAlert({ message: `Export failed: ${error?.message ?? String(error)}` });
   }
 }
@@ -1822,7 +1801,6 @@ async function exportAllPresets(presets) {
     await file.write(JSON.stringify(payload, null, 2));
     await core.showAlert({ message: `Exported ${plural(presets?.length ?? 0, "preset")}.` });
   } catch (error) {
-    console.error("Export all presets failed", error);
     await core.showAlert({ message: `Export failed: ${error?.message ?? String(error)}` });
   }
 }
@@ -1842,6 +1820,7 @@ async function importPresetsIntoStore() {
     }
 
     let presets = await readPresets();
+    // Resolve same-name conflicts once for the whole import to keep the flow predictable.
     const existingNames = new Set(presets.map((p) => p.name));
     const conflictNames = incoming.filter((p) => existingNames.has(p.name)).map((p) => p.name);
 
@@ -1883,7 +1862,6 @@ async function importPresetsIntoStore() {
     await writePresets(presets);
     await core.showAlert({ message: `Imported ${plural(incoming.length, "preset")}.` });
   } catch (error) {
-    console.error("Import presets failed", error);
     await core.showAlert({ message: `Import failed: ${error?.message ?? String(error)}` });
   }
 }
@@ -1956,96 +1934,82 @@ async function loadPreset() {
     return;
   }
 
-    let guidesToPaste = dedupeGuides(preset.guides ?? []);
-    let layoutAction = "original";
+  let guidesToPaste = dedupeGuides(preset.guides ?? []);
+  let layoutAction = "original";
 
-    if (preset.sourceDocument && originalTargetSpec && documentSpecsDiffer(preset.sourceDocument, originalTargetSpec)) {
-      const layoutMode = await askPresetLoadLayoutMode({
-        presetName: preset.name,
-        sourceDocument: preset.sourceDocument,
-        targetDocument: originalTargetSpec
-      });
-      if (!layoutMode) return;
+  // Preset metadata only affects the current document at load time, never at import time.
+  if (preset.sourceDocument && originalTargetSpec && documentSpecsDiffer(preset.sourceDocument, originalTargetSpec)) {
+    const layoutMode = await askPresetLoadLayoutMode({
+      presetName: preset.name,
+      sourceDocument: preset.sourceDocument,
+      targetDocument: originalTargetSpec
+    });
+    if (!layoutMode) return;
 
-      if (layoutMode === "resizeDocument") {
-        await core.executeAsModal(
-          async () => {
-            if (typeof targetDocument.resizeImage !== "function") {
-              throw new Error("This Photoshop build does not support document resizing from the plugin API.");
-            }
-            await targetDocument.resizeImage(
-              preset.sourceDocument.width,
-              preset.sourceDocument.height,
-              preset.sourceDocument.resolution
-            );
-          },
-          { commandName: "Resize Document for Guide Preset" }
-        );
-        layoutAction = "resizedDocument";
-      } else if (layoutMode === "applyCurrentLayout") {
-        guidesToPaste = scaleGuidesToDocumentLayout(guidesToPaste, preset.sourceDocument, originalTargetSpec);
-        layoutAction = "appliedCurrentLayout";
-      } else {
-        layoutAction = "appliedOriginalCoordinates";
-      }
-    }
-
-    const existingGuides = getGuidesSnapshotFromDocument(targetDocument);
-    const existingCount = existingGuides.length;
-
-    let pasteMode = "replace";
-    let existingGuideKeys = null;
-    let mergeAddCount = guidesToPaste.length;
-    let mergeSkipCount = 0;
-
-    if (existingCount > 0) {
-      const previewKeys = new Set(existingGuides.map(guideKey));
-      mergeAddCount = 0;
-      for (const guide of guidesToPaste) {
-        const key = guideKey(guide);
-        if (previewKeys.has(key)) {
-          mergeSkipCount += 1;
-        } else {
-          mergeAddCount += 1;
-          previewKeys.add(key);
-        }
-      }
-
-      pasteMode = await askMergeOrReplaceWithOptions({
-        title: "Load Guide Preset",
-        sourceLabel: "Preset",
-        targetLabel: "Document",
-        existingGuideCount: existingCount,
-        pasteGuideCount: guidesToPaste.length,
-        mergeAddCount,
-        mergeSkipCount
-      });
-      if (!pasteMode) return;
-      if (pasteMode === "merge") {
-        existingGuideKeys = new Set(existingGuides.map(guideKey));
-      }
-    }
-
-    await core.executeAsModal(
-      async () => {
-        if (pasteMode === "replace") {
-          targetDocument.guides.removeAll();
-        }
-        for (const guide of guidesToPaste) {
-          if (pasteMode === "merge" && existingGuideKeys) {
-            const key = guideKey(guide);
-            if (existingGuideKeys.has(key)) continue;
-            existingGuideKeys.add(key);
+    if (layoutMode === "resizeDocument") {
+      await core.executeAsModal(
+        async () => {
+          if (typeof targetDocument.resizeImage !== "function") {
+            throw new Error("This Photoshop build does not support document resizing from the plugin API.");
           }
-          targetDocument.guides.add(denormalizeDirection(guide.direction), guide.coordinate);
-        }
-      },
-      { commandName: "Load Guide Preset" }
-    );
+          await targetDocument.resizeImage(
+            preset.sourceDocument.width,
+            preset.sourceDocument.height,
+            preset.sourceDocument.resolution
+          );
+        },
+        { commandName: "Resize Document for Guide Preset" }
+      );
+      layoutAction = "resizedDocument";
+    } else if (layoutMode === "applyCurrentLayout") {
+      guidesToPaste = scaleGuidesToDocumentLayout(guidesToPaste, preset.sourceDocument, originalTargetSpec);
+      layoutAction = "appliedCurrentLayout";
+    } else {
+      layoutAction = "appliedOriginalCoordinates";
+    }
+  }
 
-    const successMsg = pasteMode === "replace"
-      ? `Loaded preset “${preset.name}” (${plural(guidesToPaste.length, "guide")})${layoutAction === "resizedDocument" ? "; document resized to preset size." : layoutAction === "appliedCurrentLayout" ? "; guides scaled to current document layout." : layoutAction === "appliedOriginalCoordinates" ? "; saved guide coordinates applied without rescaling." : ""}.`
-      : `Merged preset “${preset.name}”: added ${plural(mergeAddCount, "guide")}${mergeSkipCount > 0 ? `, ${plural(mergeSkipCount, "duplicate")} skipped` : ""}${layoutAction === "resizedDocument" ? "; document resized to preset size" : layoutAction === "appliedCurrentLayout" ? "; guides scaled to current document layout" : layoutAction === "appliedOriginalCoordinates" ? "; saved guide coordinates applied without rescaling" : ""}.`;
+  const existingGuides = getGuidesSnapshotFromDocument(targetDocument);
+  const existingCount = existingGuides.length;
+
+  let pasteMode = "replace";
+  let existingGuideKeys = null;
+  let mergeAddCount = guidesToPaste.length;
+  let mergeSkipCount = 0;
+
+  if (existingCount > 0) {
+    const preview = mergeGuides(existingGuides, guidesToPaste);
+    mergeAddCount = preview.mergeAddCount;
+    mergeSkipCount = preview.mergeSkipCount;
+
+    pasteMode = await askMergeOrReplaceWithOptions({
+      title: "Load Guide Preset",
+      sourceLabel: "Preset",
+      targetLabel: "Document",
+      existingGuideCount: existingCount,
+      pasteGuideCount: guidesToPaste.length,
+      mergeAddCount,
+      mergeSkipCount
+    });
+    if (!pasteMode) return;
+    if (pasteMode === "merge") {
+      existingGuideKeys = new Set(existingGuides.map(guideKey));
+    }
+  }
+
+  if (!(await ensureDocumentStillActive(targetDocument, "Load Guide Preset"))) return;
+
+  await applyGuidesToDocument({
+    targetDocument,
+    guides: guidesToPaste,
+    pasteMode,
+    existingGuideKeys,
+    commandName: "Load Guide Preset"
+  });
+
+  const successMsg = pasteMode === "replace"
+    ? `Loaded preset “${preset.name}” (${plural(guidesToPaste.length, "guide")})${layoutAction === "resizedDocument" ? "; document resized to preset size." : layoutAction === "appliedCurrentLayout" ? "; guides scaled to current document layout." : layoutAction === "appliedOriginalCoordinates" ? "; saved guide coordinates applied without rescaling." : ""}.`
+    : `Merged preset “${preset.name}”: added ${plural(mergeAddCount, "guide")}${mergeSkipCount > 0 ? `, ${plural(mergeSkipCount, "duplicate")} skipped` : ""}${layoutAction === "resizedDocument" ? "; document resized to preset size" : layoutAction === "appliedCurrentLayout" ? "; guides scaled to current document layout" : layoutAction === "appliedOriginalCoordinates" ? "; saved guide coordinates applied without rescaling" : ""}.`;
   await core.showAlert({ message: successMsg });
 }
 
@@ -2119,29 +2083,24 @@ function initPlugin() {
     if (!entrypoints?.setup) throw new Error("UXP entrypoints not available");
     if (!app || !constants || !core || !action) throw new Error("Photoshop UXP module missing expected exports");
 
+    // Register commands directly so Photoshop failures are easier to trace back to the handler.
     entrypoints.setup({
       commands: {
-        copyGuides: () => runCommandWithDiagnostics("Copy Guides", copyGuides),
-        pasteGuides: () => runCommandWithDiagnostics("Paste Guides", pasteGuides),
-        createGuides: () => runCommandWithDiagnostics("Create Guide", createGuides),
-        clearGuides: () => runCommandWithDiagnostics("Clear All Guides", clearGuides),
-        savePreset: () => runCommandWithDiagnostics("Save Guide Preset", savePreset),
-        loadPreset: () => runCommandWithDiagnostics("Load Guide Preset", loadPreset),
-        managePresets: () => runCommandWithDiagnostics("Manage Presets", managePresets)
+        copyGuides,
+        pasteGuides,
+        createGuides,
+        clearGuides,
+        savePreset,
+        loadPreset,
+        managePresets
       }
     });
-
-    if (!startupDiagnosticShown) {
-      startupDiagnosticShown = true;
-      console.log("Guide Master: plugin initialized successfully");
-    }
 
     applyTheme(theme);
     if (typeof theme?.addEventListener === "function") {
       theme.addEventListener("themechange", () => applyTheme(theme));
     }
   } catch (error) {
-    console.error("Guide Master: init failed", error);
     try { alert(`Guide Master failed to load.\n\n${error?.message ?? String(error)}`); } catch { /* ignore */ }
   }
 }
