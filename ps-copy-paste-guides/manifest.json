@@ -1,7 +1,7 @@
 {
   "manifestVersion": 5,
-  "id": "com.local.copy-paste-guides",
-  "name": "Guide Master",
+  "id": "GuideMaster",
+  "name": "GuideMaster",
   "version": "1.0.0",
   "main": "index.html",
   "host": {
@@ -62,6 +62,11 @@
       "type": "command",
       "id": "managePresets",
       "label": { "default": "Manage Presets…" }
+    },
+    {
+      "type": "command",
+      "id": "showHelp",
+      "label": { "default": "Help…" }
     }
   ]
 }

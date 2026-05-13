@@ -6,6 +6,9 @@ let constants;
 let core;
 let localFileSystem;
 let action;
+let pluginInitialized = false;
+let globalErrorHandlersInstalled = false;
+let commandInProgress = false;
 
 /** In-memory guide clipboard. Persists for the duration of the Photoshop session. */
 let guideClipboard = null;
@@ -572,7 +575,7 @@ async function askMergeOrReplaceWithOptions({
     return result === "merge" || result === "replace" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* already closed */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -622,7 +625,7 @@ async function askTextInput({ title, label, defaultValue = "", okText = "OK" }) 
     return value.length ? value : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -660,7 +663,7 @@ async function askConfirm({ title, message, okText = "OK", okVariant = "cta" }) 
     return result === "ok";
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -713,7 +716,7 @@ async function askCreateGuideType() {
     return String(select.value ?? "columns");
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1074,7 +1077,7 @@ async function askCreateLayoutOptions(initialLayoutType, documentWidth, document
     };
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1125,11 +1128,11 @@ async function askConfirmMergeOrReplaceAllConflicts({ conflictCount, importingCo
     return result === "merge" || result === "replace" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
-async function askPresetLoadLayoutMode({ presetName, sourceDocument, targetDocument }) {
+async function askPresetLoadLayoutMode({ presetName, sourceLabel, sourceDocument, targetDocument }) {
   const domDocument = globalThis.document;
   if (!domDocument?.createElement) return null;
 
@@ -1138,7 +1141,8 @@ async function askPresetLoadLayoutMode({ presetName, sourceDocument, targetDocum
   header.appendChild(makeEl("span", { cls: "cpg-dialog__title", text: "Load Guide Preset" }));
 
   const body = makeEl("div", { cls: "cpg-dialog__body" });
-  body.appendChild(makeEl("div", { cls: "cpg-action-section", text: `Preset “${presetName}” was saved from ${formatDocumentSpec(sourceDocument)}.` }));
+  const firstLine = sourceLabel ?? `Preset “${presetName}” was saved from ${formatDocumentSpec(sourceDocument)}.`;
+  body.appendChild(makeEl("div", { cls: "cpg-action-section", text: firstLine }));
   body.appendChild(makeEl("div", { cls: "cpg-muted", text: `Current document: ${formatDocumentSpec(targetDocument)}.` }));
   body.appendChild(makeEl("div", {
     cls: "cpg-muted",
@@ -1176,7 +1180,7 @@ async function askPresetLoadLayoutMode({ presetName, sourceDocument, targetDocum
     return result === "resizeDocument" || result === "applyCurrentLayout" || result === "applyOriginalCoordinates" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1227,7 +1231,7 @@ async function askImportPresetLayoutMode({ importingCount, sourceDocument, targe
     return result === "keepOriginal" || result === "applyCurrentLayout" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1363,7 +1367,7 @@ async function choosePresetToLoadDialog(presets, { title = "Load Guide Preset" }
     return selectedName || null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1450,7 +1454,7 @@ async function choosePresetManagementDialog(presets, { title = "Manage Presets" 
     return { action, selectedName };
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
-    dialog.remove();
+    try { dialog.remove(); } catch { /* ignore – UXP may have already detached the node */ }
   }
 }
 
@@ -1464,7 +1468,7 @@ async function copyGuides() {
   }
 
   const guides = getGuidesSnapshotFromDocument(targetDocument);
-  guideClipboard = { guides, copiedAt: Date.now() };
+  guideClipboard = { guides, sourceDocument: getDocumentSpec(targetDocument), copiedAt: Date.now() };
 
   await core.showAlert({ message: `Copied ${plural(guides.length, "guide")}.` });
 }
@@ -1481,7 +1485,43 @@ async function pasteGuides() {
     return;
   }
 
-  const guidesToPaste   = guideClipboard.guides ?? [];
+  let guidesToPaste = guideClipboard.guides ?? [];
+  const originalTargetSpec = getDocumentSpec(targetDocument);
+  let layoutAction = "original";
+
+  // If the clipboard carries source document metadata and the sizes differ,
+  // offer the same scaling options as Load Guide Preset.
+  if (guideClipboard.sourceDocument && originalTargetSpec && documentSpecsDiffer(guideClipboard.sourceDocument, originalTargetSpec)) {
+    const layoutMode = await askPresetLoadLayoutMode({
+      sourceLabel: `Guides were copied from ${formatDocumentSpec(guideClipboard.sourceDocument)}.`,
+      sourceDocument: guideClipboard.sourceDocument,
+      targetDocument: originalTargetSpec
+    });
+    if (!layoutMode) return;
+
+    if (layoutMode === "resizeDocument") {
+      await core.executeAsModal(
+        async () => {
+          if (typeof targetDocument.resizeImage !== "function") {
+            throw new Error("This Photoshop build does not support document resizing from the plugin API.");
+          }
+          await targetDocument.resizeImage(
+            guideClipboard.sourceDocument.width,
+            guideClipboard.sourceDocument.height,
+            guideClipboard.sourceDocument.resolution
+          );
+        },
+        { commandName: "Resize Document for Paste Guides" }
+      );
+      layoutAction = "resizedDocument";
+    } else if (layoutMode === "applyCurrentLayout") {
+      guidesToPaste = scaleGuidesToDocumentLayout(guidesToPaste, guideClipboard.sourceDocument, originalTargetSpec);
+      layoutAction = "appliedCurrentLayout";
+    } else {
+      layoutAction = "appliedOriginalCoordinates";
+    }
+  }
+
   const existingGuides  = getGuidesSnapshotFromDocument(targetDocument);
   const existingCount   = existingGuides.length;
 
@@ -1521,9 +1561,13 @@ async function pasteGuides() {
     commandName: "Paste Guides"
   });
 
+  const layoutSuffix = layoutAction === "resizedDocument" ? "; document resized to match source."
+    : layoutAction === "appliedCurrentLayout" ? "; guides scaled to current document layout."
+    : layoutAction === "appliedOriginalCoordinates" ? "; guide coordinates applied without rescaling."
+    : "";
   const successMsg = pasteMode === "replace"
-    ? `Replaced with ${plural(guidesToPaste.length, "guide")}.`
-    : `Merged: added ${plural(mergeAddCount, "guide")}${mergeSkipCount > 0 ? `, ${plural(mergeSkipCount, "duplicate")} skipped` : ""}.`;
+    ? `Replaced with ${plural(guidesToPaste.length, "guide")}${layoutSuffix}`
+    : `Merged: added ${plural(mergeAddCount, "guide")}${mergeSkipCount > 0 ? `, ${plural(mergeSkipCount, "duplicate")} skipped` : ""}${layoutSuffix}`;
 
   await core.showAlert({ message: successMsg });
 }
@@ -2056,6 +2100,113 @@ async function managePresets() {
   }
 }
 
+// ── Help dialog ─────────────────────────────────────────────────────────────
+
+async function showHelp() {
+  const domDocument = globalThis.document;
+  if (!domDocument?.createElement) return;
+
+  // ── Content data ──────────────────────────────────────────────────────────
+
+  const COMMANDS = [
+    {
+      name: "Copy Guides",
+      desc: "Copies all guides from the active document to an in-memory clipboard. The clipboard persists for the duration of the current Photoshop session.",
+      example: "Example: open a template document with a 12-column grid, run Copy Guides, then switch to any other open document and run Paste Guides."
+    },
+    {
+      name: "Paste Guides",
+      desc: "Pastes clipboard guides into the active document. If the source and target documents are different sizes you are prompted to scale guides to the current layout, resize the document to match the source, or apply the original coordinates without rescaling. Existing guides can be merged or replaced.",
+      example: "Example: guides were copied from a 1920\u00d71080 canvas. Working on a 2560\u00d71440 document. Paste Guides \u2192 \u201cApply to Current Layout\u201d to scale all guide positions proportionally."
+    },
+    {
+      name: "Create Guide\u2026",
+      desc: "Generates a column, row, or full grid layout. Set counts, gutters, and margins \u2014 the plugin calculates exact guide positions. Values can be entered in pixels or Photoshop\u2019s current ruler units (inches, mm, cm, pt, pc).",
+      example: "Example: create a 12-column grid with 20 px gutters and 80 px side margins, or generate a combined column+row grid in a single step using Grid mode."
+    },
+    {
+      name: "Clear All Guides",
+      desc: "Removes every guide from the active document after a confirmation prompt. The action is undoable with Cmd/Ctrl+Z in Photoshop.",
+      example: "Example: clear a working layout grid before flattening or handing off a file to a client."
+    },
+    {
+      name: "Save Guide Preset\u2026",
+      desc: "Names and saves the current document\u2019s guides to disk as a reusable preset. The preset records both the guide positions and the document\u2019s pixel dimensions and resolution so they can be scaled intelligently when loaded later. If a preset with the same name exists, choose to merge the guide sets or replace the stored preset.",
+      example: "Example: after building a standard column layout, save it as \u201cWeb 1440 Grid\u201d to reuse it across projects without recreating the guides each time."
+    },
+    {
+      name: "Load Guide Preset\u2026",
+      desc: "Applies a saved preset to the active document. When document sizes differ from the preset\u2019s source you can scale guides proportionally to fit the current canvas, resize the document to the preset\u2019s original dimensions, or apply the saved coordinates as-is. Existing guides can be merged or replaced.",
+      example: "Example: apply the \u201cWeb 1440 Grid\u201d preset to a new 1920 px wide document and choose \u201cApply to Current Layout\u201d \u2014 the plugin scales every guide to the wider canvas automatically."
+    },
+    {
+      name: "Manage Presets\u2026",
+      desc: "Browse all saved presets in one place. Rename or delete individual presets. Export a single preset or all presets to a portable JSON file for backup or sharing. Import a JSON file from another machine \u2014 name conflicts can be merged or replaced in one step.",
+      example: "Example: export all presets to a shared network folder, then import them on another workstation to keep guide layouts consistent across a whole team."
+    }
+  ];
+
+  const TIPS = [
+    "The clipboard resets when Photoshop restarts. Use Save Guide Preset to persist guide layouts permanently across sessions.",
+    "Preset files are plain JSON \u2014 they can be version-controlled, backed up, or hand-edited in any text editor.",
+    "\u201cApply to Current Layout\u201d scales guide positions proportionally based on the pixel dimensions and resolution of the source and target documents.",
+    "Use Grid mode in Create Guide\u2026 to generate columns and rows in a single operation instead of running the command twice.",
+    "When merging guides, exact duplicates (same direction and coordinate) are automatically detected and skipped.",
+    "Guide coordinates are always stored internally in pixels regardless of the ruler units shown in the Create Guide dialog."
+  ];
+
+  // ── Build dialog ──────────────────────────────────────────────────────────
+
+  const dialog = makeEl("dialog", { cls: "cpg-dialog cpg-dialog--help" });
+
+  const header = makeEl("div", { cls: "cpg-dialog__header" });
+  header.appendChild(makeEl("span", { cls: "cpg-dialog__title", text: "Guide Master \u2014 Help" }));
+
+  // Scrollable content area
+  const scroll = makeEl("div", { cls: "cpg-help-scroll" });
+
+  // Commands section
+  const cmdSection = makeEl("div", { cls: "cpg-help-section" });
+  cmdSection.appendChild(makeEl("div", { cls: "cpg-help-section__heading", text: "Commands" }));
+  for (const cmd of COMMANDS) {
+    const block = makeEl("div", { cls: "cpg-help-command" });
+    block.appendChild(makeEl("div", { cls: "cpg-help-command__name", text: cmd.name }));
+    block.appendChild(makeEl("div", { cls: "cpg-help-command__desc", text: cmd.desc }));
+    block.appendChild(makeEl("div", { cls: "cpg-help-command__example", text: cmd.example }));
+    cmdSection.appendChild(block);
+  }
+  scroll.appendChild(cmdSection);
+
+  // Tips section
+  const tipsSection = makeEl("div", { cls: "cpg-help-section" });
+  tipsSection.appendChild(makeEl("div", { cls: "cpg-help-section__heading", text: "Tips" }));
+  for (const tip of TIPS) {
+    tipsSection.appendChild(makeEl("div", { cls: "cpg-help-tip", text: tip }));
+  }
+  scroll.appendChild(tipsSection);
+
+  const footer = makeEl("div", { cls: "cpg-dialog__footer" });
+  const closeBtn = makeEl("button", { text: "Close" });
+  closeBtn.setAttribute("uxp-variant", "cta");
+  closeBtn.addEventListener("click", () => dialog.close("close"));
+  footer.appendChild(closeBtn);
+
+  dialog.append(header, scroll, footer);
+  domDocument.body.appendChild(dialog);
+
+  const waitForClose = new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue || "close"), { once: true });
+  });
+
+  try {
+    dialog.showModal();
+    await waitForClose;
+  } finally {
+    try { dialog.close(); } catch { /* ignore */ }
+    try { dialog.remove(); } catch { /* ignore \u2013 UXP may have already detached the node */ }
+  }
+}
+
 // ── Theme awareness ─────────────────────────────────────────────────────────
 
 function applyTheme(themeModule) {
@@ -2065,9 +2216,103 @@ function applyTheme(themeModule) {
   body.setAttribute("data-cpg-theme", dark ? "dark" : "light");
 }
 
+function formatErrorMessage(error) {
+  if (!error) return "Unknown error";
+  return error?.stack || error?.message || String(error);
+}
+
+async function reportPluginError(context, error, { showAlert = false } = {}) {
+  const detail = formatErrorMessage(error);
+  const message = `${context}\n\n${detail}`;
+
+  try {
+    console.error(`[Guide Master] ${message}`);
+  } catch {
+    // Ignore console failures in older UXP hosts.
+  }
+
+  if (!showAlert) return;
+
+  try {
+    if (core?.showAlert) {
+      await core.showAlert({ message });
+      return;
+    }
+  } catch {
+    // Fall through to alert() if available.
+  }
+
+  try {
+    alert(message);
+  } catch {
+    // Ignore UI reporting failures.
+  }
+}
+
+function wrapCommandHandler(commandName, handler) {
+  return async (...args) => {
+    // Prevent concurrent command execution: two async commands running at the
+    // same time can collide on executeAsModal or dialogs, destabilising UXP.
+    if (commandInProgress) {
+      try {
+        await core?.showAlert({ message: "Guide Master is already running a command. Please wait for it to finish." });
+      } catch { /* ignore – the in-progress command owns the UI right now */ }
+      return undefined;
+    }
+    commandInProgress = true;
+    try {
+      return await handler(...args);
+    } catch (error) {
+      try {
+        await reportPluginError(`Guide Master command failed: ${commandName}`, error, { showAlert: true });
+      } catch {
+        // Swallow any failure in the error reporter itself so it cannot
+        // become a new unhandled rejection that triggers PS blacklisting.
+      }
+      return undefined;
+    } finally {
+      commandInProgress = false;
+    }
+  };
+}
+
+function installGlobalErrorHandlers() {
+  if (globalErrorHandlersInstalled) return;
+  if (typeof globalThis.addEventListener !== "function") return;
+
+  globalThis.addEventListener("error", (event) => {
+    // Prevent the UXP host from seeing this as a plugin crash and blacklisting it.
+    event.preventDefault();
+    const error = event?.error || new Error(event?.message || "Unhandled error event");
+    reportPluginError("Guide Master encountered an unhandled error", error).catch(() => {});
+  });
+
+  globalThis.addEventListener("unhandledrejection", (event) => {
+    // Prevent the UXP host from seeing this as a plugin crash and blacklisting it.
+    event.preventDefault();
+    const reason = event?.reason instanceof Error ? event.reason : new Error(String(event?.reason || "Unhandled promise rejection"));
+    reportPluginError("Guide Master encountered an unhandled promise rejection", reason).catch(() => {});
+  });
+
+  globalErrorHandlersInstalled = true;
+}
+
+function initializeTheme(themeModule) {
+  try {
+    applyTheme(themeModule);
+    if (typeof themeModule?.addEventListener === "function") {
+      themeModule.addEventListener("themechange", () => applyTheme(themeModule));
+    }
+  } catch (error) {
+    reportPluginError("Guide Master theme setup failed", error).catch(() => {});
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 function initPlugin() {
+  if (pluginInitialized) return;
+
   try {
     const { entrypoints: uxpEntrypoints, theme, storage } = require("uxp");
     const photoshop = require("photoshop");
@@ -2083,25 +2328,30 @@ function initPlugin() {
     if (!entrypoints?.setup) throw new Error("UXP entrypoints not available");
     if (!app || !constants || !core || !action) throw new Error("Photoshop UXP module missing expected exports");
 
+    installGlobalErrorHandlers();
+
     // Register commands directly so Photoshop failures are easier to trace back to the handler.
     entrypoints.setup({
       commands: {
-        copyGuides,
-        pasteGuides,
-        createGuides,
-        clearGuides,
-        savePreset,
-        loadPreset,
-        managePresets
+        copyGuides: wrapCommandHandler("Copy Guides", copyGuides),
+        pasteGuides: wrapCommandHandler("Paste Guides", pasteGuides),
+        createGuides: wrapCommandHandler("Create Guide", createGuides),
+        clearGuides: wrapCommandHandler("Clear All Guides", clearGuides),
+        savePreset: wrapCommandHandler("Save Guide Preset", savePreset),
+        loadPreset: wrapCommandHandler("Load Guide Preset", loadPreset),
+        managePresets: wrapCommandHandler("Manage Presets", managePresets),
+        showHelp: wrapCommandHandler("Help", showHelp)
       }
     });
 
-    applyTheme(theme);
-    if (typeof theme?.addEventListener === "function") {
-      theme.addEventListener("themechange", () => applyTheme(theme));
-    }
+    pluginInitialized = true;
+
+    // Theme syncing should not block command registration if host UI state is transient.
+    initializeTheme(theme);
   } catch (error) {
-    try { alert(`Guide Master failed to load.\n\n${error?.message ?? String(error)}`); } catch { /* ignore */ }
+    // Use .catch() instead of void so the promise is explicitly handled and
+    // cannot become an unhandled rejection that would cause PS to blacklist the plugin.
+    reportPluginError("Guide Master failed to load.", error, { showAlert: true }).catch(() => {});
   }
 }
 

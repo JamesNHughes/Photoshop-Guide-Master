@@ -256,6 +256,91 @@
       button[disabled] {
         opacity: 0.5;
       }
+
+      /* ── Help dialog ──────────────────────────────────────────────────── */
+
+      .cpg-dialog--help {
+        min-width: 480px;
+      }
+
+      /* Scrollable content area inside the help dialog */
+      .cpg-help-scroll {
+        max-height: 460px;
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      .cpg-help-section {
+        margin-bottom: 20px;
+      }
+
+      .cpg-help-section:last-child {
+        margin-bottom: 0;
+      }
+
+      /* Section heading — e.g. "COMMANDS" / "TIPS" */
+      .cpg-help-section__heading {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.55;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--uxp-host-border-color);
+      }
+
+      /* One command block (name + description + example) */
+      .cpg-help-command {
+        margin-bottom: 14px;
+      }
+
+      .cpg-help-command:last-child {
+        margin-bottom: 0;
+      }
+
+      .cpg-help-command__name {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+
+      .cpg-help-command__desc {
+        font-size: 12px;
+        line-height: 1.55;
+        opacity: 0.85;
+        margin-bottom: 5px;
+      }
+
+      /* Italic example line, set off with a left accent bar */
+      .cpg-help-command__example {
+        font-size: 11px;
+        line-height: 1.45;
+        opacity: 0.65;
+        font-style: italic;
+        padding-left: 10px;
+        border-left: 2px solid var(--uxp-host-border-color);
+      }
+
+      /* Individual tip bullet in the Tips section */
+      .cpg-help-tip {
+        font-size: 11px;
+        line-height: 1.55;
+        opacity: 0.72;
+        margin-bottom: 6px;
+        padding-left: 14px;
+        position: relative;
+      }
+
+      .cpg-help-tip:last-child {
+        margin-bottom: 0;
+      }
+
+      .cpg-help-tip::before {
+        content: "\2013"; /* en dash bullet */
+        position: absolute;
+        left: 0;
+      }
     </style>
   </head>
   <body>
