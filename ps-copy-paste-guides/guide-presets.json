@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 2,
+  "presets": [
+    {
+      "name": "2 Column no gutter no margin",
+      "guides": [
+        {
+          "direction": "vertical",
+          "coordinate": 0
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 1240
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 2480
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770518750,
+      "updatedAt": 1778770930582
+    },
+    {
+      "name": "2 Columns 4 Rows no gutter no margin",
+      "guides": [
+        {
+          "direction": "vertical",
+          "coordinate": 0
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 1240
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 2480
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 0
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 877
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1754
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2631
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 3508
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770833458,
+      "updatedAt": 1778770930582
+    },
+    {
+      "name": "2 Rows no gutter no margin",
+      "guides": [
+        {
+          "direction": "horizontal",
+          "coordinate": 0
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1754
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 3508
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770565945,
+      "updatedAt": 1778770930582
+    },
+    {
+      "name": "3 Columns no gutter no margin",
+      "guides": [
+        {
+          "direction": "vertical",
+          "coordinate": 0
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 826.66667
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 1653.33333
+        },
+        {
+          "direction": "vertical",
+          "coordinate": 2480
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770627796,
+      "updatedAt": 1778770930582
+    },
+    {
+      "name": "3 Rows no gutter no margin",
+      "guides": [
+        {
+          "direction": "horizontal",
+          "coordinate": 0
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1169.33333
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2338.66667
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 3508
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770677152,
+      "updatedAt": 1778770930582
+    },
+    {
+      "name": "6 Rows 2mm gutter",
+      "guides": [
+        {
+          "direction": "horizontal",
+          "coordinate": 0
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 564.98163
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 588.60367
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1153.5853
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1177.20735
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1742.18898
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 1765.81102
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2330.79265
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2354.4147
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2919.39633
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 2943.01837
+        },
+        {
+          "direction": "horizontal",
+          "coordinate": 3508
+        }
+      ],
+      "sourceDocument": {
+        "width": 2480,
+        "height": 3508,
+        "resolution": 300
+      },
+      "createdAt": 1778770914833,
+      "updatedAt": 1778770930582
+    }
+  ]
+}
