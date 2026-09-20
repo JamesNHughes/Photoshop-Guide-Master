@@ -1,12 +1,12 @@
 {
   "manifestVersion": 5,
-  "id": "GuideMaster",
-  "name": "GuideMaster",
-  "version": "1.0.0",
+  "id": "GuideMasterPhotoshop",
+  "name": "Guide Master Photoshop",
+  "version": "1.0.1",
   "main": "index.html",
   "host": {
     "app": "PS",
-    "minVersion": "23.0.0"
+    "minVersion": "23.3.0"
   },
   "requiredPermissions": {
     "localFileSystem": "fullAccess"

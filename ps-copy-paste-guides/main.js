@@ -1,5 +1,7 @@
 /* global require */
 
+const { showPluginDialog } = require("./dialogs.js");
+
 let entrypoints;
 let app;
 let constants;
@@ -565,13 +567,8 @@ async function askMergeOrReplaceWithOptions({
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     return result === "merge" || result === "replace" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* already closed */ }
@@ -611,15 +608,11 @@ async function askTextInput({ title, label, defaultValue = "", okText = "OK" }) 
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    input.focus();
-    input.select();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core, () => {
+      input.focus();
+      input.select();
+    });
     if (result !== "ok") return null;
     const value = String(input.value ?? "").trim();
     return value.length ? value : null;
@@ -653,13 +646,8 @@ async function askConfirm({ title, message, okText = "OK", okVariant = "cta" }) 
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     return result === "ok";
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
@@ -705,13 +693,8 @@ async function askCreateGuideType() {
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     if (result !== "ok") return null;
     return String(select.value ?? "columns");
   } finally {
@@ -1051,17 +1034,13 @@ async function askCreateLayoutOptions(initialLayoutType, documentWidth, document
   updateAutoFields();
   validateLayout();
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const { isColumns, isGrid } = getLayoutFlags();
-    const primaryInput = isColumns || isGrid ? columnsInput : rowsInput;
-    primaryInput.focus();
-    primaryInput.select();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core, () => {
+      const { isColumns, isGrid } = getLayoutFlags();
+      const primaryInput = isColumns || isGrid ? columnsInput : rowsInput;
+      primaryInput.focus();
+      primaryInput.select();
+    });
     if (result !== "create") return null;
     return {
       layoutType: String(layoutTypeSelect.value ?? "columns"),
@@ -1118,13 +1097,8 @@ async function askConfirmMergeOrReplaceAllConflicts({ conflictCount, importingCo
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     return result === "merge" || result === "replace" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
@@ -1170,13 +1144,8 @@ async function askPresetLoadLayoutMode({ presetName, sourceLabel, sourceDocument
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     return result === "resizeDocument" || result === "applyCurrentLayout" || result === "applyOriginalCoordinates" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
@@ -1221,13 +1190,8 @@ async function askImportPresetLayoutMode({ importingCount, sourceDocument, targe
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const result = await waitForClose;
+    const result = await showPluginDialog(dialog, core);
     return result === "keepOriginal" || result === "applyCurrentLayout" ? result : null;
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
@@ -1353,13 +1317,8 @@ async function choosePresetToLoadDialog(presets, { title = "Load Guide Preset" }
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const action = await waitForClose;
+    const action = await showPluginDialog(dialog, core);
     if (!action || action === "cancel") return null;
 
     if (action !== "load") return null;
@@ -1442,13 +1401,8 @@ async function choosePresetManagementDialog(presets, { title = "Manage Presets" 
   dialog.append(header, body, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    const action = await waitForClose;
+    const action = await showPluginDialog(dialog, core);
     if (!action || action === "cancel") return null;
     const selectedName = String(select.value ?? "") || String(presets?.[0]?.name ?? "");
     return { action, selectedName };
@@ -2194,13 +2148,8 @@ async function showHelp() {
   dialog.append(header, scroll, footer);
   domDocument.body.appendChild(dialog);
 
-  const waitForClose = new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue || "close"), { once: true });
-  });
-
   try {
-    dialog.showModal();
-    await waitForClose;
+    await showPluginDialog(dialog, core);
   } finally {
     try { dialog.close(); } catch { /* ignore */ }
     try { dialog.remove(); } catch { /* ignore \u2013 UXP may have already detached the node */ }

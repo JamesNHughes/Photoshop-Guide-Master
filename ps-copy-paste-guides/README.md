@@ -1,6 +1,10 @@
 # Guide Master (Photoshop UXP plugin)
 
-Adds 7 commands:
+Requires Photoshop 23.3 or newer. The plugin ID is `GuideMasterPhotoshop` so
+installing the InDesign edition cannot overwrite this edition. See the root
+README for version 1.0.1 upgrade and preset migration instructions.
+
+Adds 8 commands:
 
 - **Copy Guides**
 - **Paste Guides**
@@ -9,6 +13,7 @@ Adds 7 commands:
 - **Save Guide Preset…**
 - **Load Guide Preset…**
 - **Manage Presets…**
+- **Help…**
 
 ## What it does
 
@@ -80,7 +85,7 @@ Photoshop UXP plugins are distributed as a `.ccx` file.
 
 1. Make sure the plugin loads and works via the UXP Developer Tool.
 2. (For real distribution) get a real plugin id from Adobe Developer Distribution, then replace the `id` in `manifest.json`.
-   - The current id (`com.local.copy-paste-guides`) is fine for local dev/testing, but is not suitable for marketplace distribution.
+   - The current id (`GuideMasterPhotoshop`) is for local distribution; obtain a registered ID for marketplace distribution. Never reuse the InDesign edition's ID.
 3. In **UXP Developer Tool**, find the plugin and choose **Actions (⋯) → Package**.
 4. Pick an output folder. UDT will create a `.ccx`.
 5. Test the packaged build:

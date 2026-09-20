@@ -57,6 +57,8 @@ When importing a preset library, the same rescaling choice applies so imported p
 
 ## Install (Development)
 
+Requires Photoshop 23.3 or newer.
+
 1. Install **UXP Developer Tool** via Creative Cloud Desktop.
 2. Open UXP Developer Tool → **Add Plugin…** → select the `ps-copy-paste-guides` folder.
 3. Click **Load**.
@@ -68,6 +70,38 @@ When importing a preset library, the same rescaling choice applies so imported p
 2. For marketplace distribution, replace the plugin `id` in `manifest.json` with one obtained from [Adobe Developer Distribution](https://developer.adobe.com/distribute/home).
 3. In UXP Developer Tool: **Actions (⋯) → Package** → choose an output folder.
 4. Distribute the resulting `.ccx` file.
+
+## Version 1.0.1: disabled commands and installation conflicts
+
+The Photoshop build now uses `GuideMasterPhotoshop` as its plugin ID and
+`Guide Master Photoshop` as its display name. The old `GuideMaster` ID was also
+used by the InDesign edition, allowing one installation to replace the other's
+files. Keep the two editions' IDs distinct, including when registering them for
+distribution.
+
+All dialogs now await the native UXP dialog promise within an interactive
+Photoshop modal scope. Cancel, Escape, window dismissal, and opening failures
+can finish the command instead of leaving it waiting for a DOM close event.
+
+Install `Release/GuideMasterPhotoshop_1.0.1.ccx` and restart Photoshop. Because
+the plugin ID changed, existing presets need to be imported through **Manage
+Presets → Import**. Back up the old plugin's `PluginData/guide-presets.json`
+before uninstalling anything. On this machine, a backup was saved separately
+at `Release/preset-backup/guide-presets.json`; it is not included in the installer.
+The existing Photoshop 2026 presets on this machine have also been copied into
+the new plugin's data folder and verified against the backup, so no manual
+import is needed here.
+Keep the InDesign edition installed if you use it.
+
+Manual verification in Photoshop: open and close Help repeatedly; cancel Create
+Guide using Cancel, Escape, and the window close button; then create a layout,
+copy/paste it, and load a preset. Confirm the commands remain enabled after each
+operation. Automated dialog lifecycle tests run with
+`node --test tests/dialogs.test.js`; they simulate UXP and do not replace this host check.
+
+API references: [Adobe modal dialogs](https://developer.adobe.com/uxp/guides/how-to/add-modal-dialogs/),
+[Photoshop modal execution](https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/executeasmodal),
+and [manifest v5 requirements](https://developer.adobe.com/photoshop/uxp/2022/guides/uxp-guide/uxp-misc/manifest-v5/).
 
 ---
 
