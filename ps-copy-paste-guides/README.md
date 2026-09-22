@@ -2,7 +2,7 @@
 
 Requires Photoshop 23.3 or newer. The plugin ID is `GuideMasterPhotoshop` so
 installing the InDesign edition cannot overwrite this edition. See the root
-README for version 1.0.1 upgrade and preset migration instructions.
+README for version 1.0.2 upgrade and preset migration instructions.
 
 Adds 8 commands:
 

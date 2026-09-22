@@ -71,7 +71,12 @@ Requires Photoshop 23.3 or newer.
 3. In UXP Developer Tool: **Actions (⋯) → Package** → choose an output folder.
 4. Distribute the resulting `.ccx` file.
 
-## Version 1.0.1: disabled commands and installation conflicts
+## Version 1.0.2: maintenance release
+
+Version 1.0.2 packages the latest Photoshop dialog lifecycle and installation
+conflict fixes for distribution. It includes the fixes introduced in 1.0.1.
+
+### Disabled commands and installation conflicts
 
 The Photoshop build now uses `GuideMasterPhotoshop` as its plugin ID and
 `Guide Master Photoshop` as its display name. The old `GuideMaster` ID was also
@@ -83,7 +88,9 @@ All dialogs now await the native UXP dialog promise within an interactive
 Photoshop modal scope. Cancel, Escape, window dismissal, and opening failures
 can finish the command instead of leaving it waiting for a DOM close event.
 
-Install `Release/GuideMasterPhotoshop_1.0.1.ccx` and restart Photoshop. Because
+Install `GuideMasterPhotoshop_1.0.2.ccx` from the
+[latest release](https://github.com/JamesNHughes/Photoshop-Guide-Master/releases/latest)
+and restart Photoshop. Because
 the plugin ID changed, existing presets need to be imported through **Manage
 Presets → Import**. Back up the old plugin's `PluginData/guide-presets.json`
 before uninstalling anything. On this machine, a backup was saved separately
